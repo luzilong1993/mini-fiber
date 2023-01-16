@@ -1,4 +1,4 @@
-import { createTaskQueue,arrified,createStateNode,getTag } from '../Misc';
+import { createTaskQueue, arrified, createStateNode, getTag } from '../Misc';
 
 const taskQueue = createTaskQueue();
 /**
@@ -10,8 +10,16 @@ let pendingCommit = null;
 
 const commitAllWork = fiber => {
     fiber.effects.forEach(item => {
-        if(item.effectTag === 'placement'){
-            item.parent.stateNode.appendChild(item.stateNode)
+        if (item.effectTag === 'placement') {
+            let fiber = item;
+            let parentFiber = item.parent;
+            while (parentFiber.tag === 'class_component') {
+                parentFiber = parentFiber.parent
+            }
+
+            if (fiber.tag === 'host_component') {
+                parentFiber.stateNode.appendChild(fiber.stateNode)
+            }
         }
     })
 }
@@ -33,19 +41,19 @@ const getFirstTask = () => {
     }
 }
 
-const reconcileChildren = (fiber,children) => {
+const reconcileChildren = (fiber, children) => {
     /**
      * children 可能是对象也可也能是数组
      * 将children转变为数据
      */
     const arrifiedChildern = arrified(children);
-    
+
     let index = 0;
     let numberOfElement = arrifiedChildern.length;
     let element = null;
     let newFiber = null;
     let prevFiber = null;
-    while(index < numberOfElement) {
+    while (index < numberOfElement) {
         element = arrifiedChildern[index];
         /**
          * 子集fiber对象
@@ -64,9 +72,8 @@ const reconcileChildren = (fiber,children) => {
          */
         newFiber.stateNode = createStateNode(newFiber);
 
-
         // 为父级fiber添加子集fiber
-        if(index === 0) {
+        if (index === 0) {
             fiber.child = newFiber;
         } else {
             // 为fiber添加下一个兄弟fiber
@@ -77,16 +84,23 @@ const reconcileChildren = (fiber,children) => {
 
         index++
     }
-    
-    
 }
 
 const executeTask = (fiber) => {
     /**
      * 构建子集fiber对象
      */
-    reconcileChildren(fiber,fiber.props.children);
-    if(fiber.child) {
+    if (fiber.tag === 'class_component') {
+        reconcileChildren(fiber, fiber.stateNode.render());
+    } else {
+        reconcileChildren(fiber, fiber.props.children);
+    }
+
+    /**
+     * 如果子集存在 返回子级
+     * 将这个子级当做父级 构建这个父级下的子级
+     */
+    if (fiber.child) {
         return fiber.child
     }
 
@@ -100,7 +114,7 @@ const executeTask = (fiber) => {
         currentExcutelyFiber.parent.effects = currentExcutelyFiber.parent.effects.concat(
             currentExcutelyFiber.effects.concat([currentExcutelyFiber])
         )
-        if(currentExcutelyFiber.sibling) {
+        if (currentExcutelyFiber.sibling) {
             return currentExcutelyFiber.sibling
         }
         currentExcutelyFiber = currentExcutelyFiber.parent
@@ -112,17 +126,17 @@ const workLoop = deadline => {
     /**
      * 如果子任务不存在，获取子任务
      */
-    if(!subTask) {
+    if (!subTask) {
         subTask = getFirstTask();
     }
     /**
      * 如果任务存在并且浏览器有空余时间
      * executeTask 方法执行任务，接收子任务，返回新的任务
      */
-    while(subTask && deadline.timeRemaining() > 1) {
+    while (subTask && deadline.timeRemaining() > 1) {
         subTask = executeTask(subTask)
     }
-    if(pendingCommit) {
+    if (pendingCommit) {
         commitAllWork(pendingCommit)
     }
 }
@@ -137,7 +151,7 @@ const performTask = (deadline) => {
      * 判断任务队列中是否还有任务没有执行
      * 再一次告诉浏览器在空闲的时间执行任务
      */
-    if(subTask || !taskQueue.isEmpty()) {
+    if (subTask || !taskQueue.isEmpty()) {
         requestIdleCallback(performTask)
     }
 }
