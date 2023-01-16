@@ -19,10 +19,16 @@ class Greating extends Component {
     render() {
         return (
             <div>
-                <p>hhhh</p>
+                <p>{this.props.title}hhhh</p>
             </div>
         );
     }
 }
 
-render(<Greating />, root)
+render(<Greating title='title'/>, root)
+
+function FnComponent(props) {
+    return <div>{props.title}FnComponent</div>
+}
+
+// render(<FnComponent title='hello'/>, root)
