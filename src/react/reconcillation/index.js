@@ -6,6 +6,16 @@ const taskQueue = createTaskQueue();
  */
 let subTask = null;
 
+let pendingCommit = null;
+
+const commitAllWork = fiber => {
+    fiber.effects.forEach(item => {
+        if(item.effectTag === 'placement'){
+            item.parent.stateNode.appendChild(item.stateNode)
+        }
+    })
+}
+
 const getFirstTask = () => {
     /**
      * 从任务队列中获取任务
@@ -45,7 +55,7 @@ const reconcileChildren = (fiber,children) => {
             props: element.props,
             tag: getTag(element),
             effects: [],
-            effecttag: 'placement',
+            effectTag: 'placement',
             parent: fiber,
         }
 
@@ -55,7 +65,7 @@ const reconcileChildren = (fiber,children) => {
         newFiber.stateNode = createStateNode(newFiber);
 
 
-        // 为父级fiber添加子极fiber
+        // 为父级fiber添加子集fiber
         if(index === 0) {
             fiber.child = newFiber;
         } else {
@@ -72,8 +82,30 @@ const reconcileChildren = (fiber,children) => {
 }
 
 const executeTask = (fiber) => {
-    reconcileChildren(fiber,fiber.props.children)
-    console.log(fiber);
+    /**
+     * 构建子集fiber对象
+     */
+    reconcileChildren(fiber,fiber.props.children);
+    if(fiber.child) {
+        return fiber.child
+    }
+
+    /**
+     * 如果存在同级，返回同级，构建同级的子级
+     * 如果同级不存在，返回到父级 看父级是否有同级
+     */
+    let currentExcutelyFiber = fiber;
+
+    while (currentExcutelyFiber.parent) {
+        currentExcutelyFiber.parent.effects = currentExcutelyFiber.parent.effects.concat(
+            currentExcutelyFiber.effects.concat([currentExcutelyFiber])
+        )
+        if(currentExcutelyFiber.sibling) {
+            return currentExcutelyFiber.sibling
+        }
+        currentExcutelyFiber = currentExcutelyFiber.parent
+    }
+    pendingCommit = currentExcutelyFiber;
 }
 
 const workLoop = deadline => {
@@ -89,6 +121,9 @@ const workLoop = deadline => {
      */
     while(subTask && deadline.timeRemaining() > 1) {
         subTask = executeTask(subTask)
+    }
+    if(pendingCommit) {
+        commitAllWork(pendingCommit)
     }
 }
 
